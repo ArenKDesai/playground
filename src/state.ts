@@ -97,6 +97,7 @@ export class State {
     {name: "networkShape", type: Type.ARRAY_NUMBER},
     {name: "seed", type: Type.STRING},
     {name: "showTestData", type: Type.BOOLEAN},
+    {name: "showPredictionLine", type: Type.BOOLEAN},
     {name: "percTrainData", type: Type.NUMBER},
     {name: "x", type: Type.BOOLEAN},
     {name: "y", type: Type.BOOLEAN},
@@ -119,6 +120,7 @@ export class State {
   learningRate = 0.01;
   regularizationRate = 0;
   showTestData = false;
+  showPredictionLine = true;
   noise = 0;
   batchSize = 10;
   tutorial: string = null;

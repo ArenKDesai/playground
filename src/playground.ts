@@ -71,6 +71,7 @@ let INPUTS: {[name: string]: InputFeature} = {
 
 let HIDABLE_CONTROLS = [
   ["Show test data", "showTestData"],
+  ["Show prediction line", "showPredictionLine"],
   ["Play button", "playButton"],
   ["Step button", "stepButton"],
   ["Reset button", "resetButton"],
@@ -254,6 +255,15 @@ function makeGUI() {
   });
   // Check/uncheck the checkbox according to the current state.
   showTestData.property("checked", state.showTestData);
+
+  let showPredictionLine = d3.select("#show-prediction-line")
+      .on("change", function() {
+    state.showPredictionLine = this.checked;
+    state.serialize();
+    userHasInteracted();
+    drawPredictionLine();
+  });
+  showPredictionLine.property("checked", state.showPredictionLine);
 
   let percTrain = d3.select("#percTrainData").on("input", function() {
     state.percTrainData = this.value;
@@ -824,13 +834,7 @@ function updateUI(firstStep = false) {
   let selectedId = selectedNodeId != null ?
       selectedNodeId : nn.getOutputNode(network).id;
   heatMap.updateBackground(boundary[selectedId], false);
-  if (isOneD()) {
-    // Plot the prediction; every column of the output matrix is constant.
-    heatMap.updateCurve(boundary[nn.getOutputNode(network).id]
-        .map(column => column[0] * customdata.DISPLAY_RADIUS));
-  } else {
-    heatMap.updateCurve(null);
-  }
+  drawPredictionLine();
 
   // Update all decision boundaries.
   d3.select("#network").selectAll("div.canvas")
@@ -1369,7 +1373,24 @@ function updateHeatmapPoints() {
       customdata.LMP_AXES : customdata.axisDomains();
   heatMap.setAxisDomains(axes.x, axes.y, axes.xLabel, axes.yLabel);
   d3.select("#oned-note").style("display", oneD ? null : "none");
+  let lineToggleHidden =
+      state.getHiddenProps().indexOf("showPredictionLine") !== -1;
+  d3.select("#show-prediction-line-label")
+      .style("display", oneD && !lineToggleHidden ? null : "none");
   if (!oneD) {
+    heatMap.updateCurve(null);
+  }
+}
+
+/** Draws the network's prediction as a line over 1-D data, if enabled. */
+function drawPredictionLine() {
+  let outputBoundary = network != null ?
+      boundary[nn.getOutputNode(network).id] : null;
+  if (isOneD() && state.showPredictionLine && outputBoundary != null) {
+    // Every column of the output matrix is constant for 1-D data.
+    heatMap.updateCurve(outputBoundary
+        .map(column => column[0] * customdata.DISPLAY_RADIUS));
+  } else {
     heatMap.updateCurve(null);
   }
 }

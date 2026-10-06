@@ -41,6 +41,7 @@ export class HeatMap {
   private color;
   private canvas;
   private svg;
+  private curve;
 
   constructor(
       width: number, numSamples: number, xDomain: [number, number],
@@ -106,33 +107,66 @@ export class HeatMap {
         // Overlay the svg on top of the canvas.
         "position": "absolute",
         "left": "0",
-        "top": "0"
+        "top": "0",
+        // Let long axis labels (e.g. custom data units) extend past the edge.
+        "overflow": "visible"
       }).append("g")
         .attr("transform", `translate(${padding},${padding})`);
 
       this.svg.append("g").attr("class", "train");
       this.svg.append("g").attr("class", "test");
+      this.curve = this.svg.append("path").attr("class", "curve");
     }
 
     if (this.settings.showAxes) {
-      let xAxis = d3.svg.axis()
-        .scale(this.xScale)
-        .orient("bottom");
-
-      let yAxis = d3.svg.axis()
-        .scale(this.yScale)
-        .orient("right");
-
       this.svg.append("g")
         .attr("class", "x axis")
-        .attr("transform", `translate(0,${height - 2 * padding})`)
-        .call(xAxis);
+        .attr("transform", `translate(0,${height - 2 * padding})`);
 
       this.svg.append("g")
         .attr("class", "y axis")
-        .attr("transform", "translate(" + (width - 2 * padding) + ",0)")
-        .call(yAxis);
+        .attr("transform", "translate(" + (width - 2 * padding) + ",0)");
+
+      this.setAxisDomains(null, null);
     }
+  }
+
+  /**
+   * Relabels the axes, e.g. to show the original units of custom data.
+   * null keeps the default domain for that axis.
+   */
+  setAxisDomains(xDomain: [number, number], yDomain: [number, number]) {
+    if (!this.settings.showAxes) {
+      return;
+    }
+    let xScale = d3.scale.linear()
+      .domain(xDomain || this.xScale.domain())
+      .range(this.xScale.range());
+    let yScale = d3.scale.linear()
+      .domain(yDomain || this.yScale.domain())
+      .range(this.yScale.range());
+    this.svg.select("g.x.axis").call(
+        d3.svg.axis().scale(xScale).orient("bottom").ticks(xDomain ? 6 : 10));
+    this.svg.select("g.y.axis").call(
+        d3.svg.axis().scale(yScale).orient("right").ticks(yDomain ? 6 : 10));
+  }
+
+  /**
+   * Draws a curve through `ys`, which are y values (in the heatmap domain) at
+   * evenly spaced x positions across the domain. null removes the curve.
+   */
+  updateCurve(ys: number[]): void {
+    if (ys == null || ys.length < 2) {
+      this.curve.attr("d", null);
+      return;
+    }
+    let xDomain = this.xScale.domain();
+    let yDomain = this.yScale.domain();
+    let step = (xDomain[1] - xDomain[0]) / (ys.length - 1);
+    let line = d3.svg.line<number>()
+      .x((d, i) => this.xScale(xDomain[0] + i * step))
+      .y(d => this.yScale(Math.max(yDomain[0], Math.min(yDomain[1], d))));
+    this.curve.attr("d", line(ys));
   }
 
   updateTestPoints(points: Example2D[]): void {

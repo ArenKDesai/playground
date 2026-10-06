@@ -15,8 +15,13 @@
 >   1-D data). A header row is optional. Inputs are min-max scaled to the
 >   playground grid and the target to [-1, 1]. Files over 3000 rows are
 >   subsampled. CSV data is kept in the browser's local storage and is not
->   uploaded or put in the URL. Click *Load example* for a sample dataset of
->   temperature, wind speed and electricity demand.
+>   uploaded or put in the URL. Two examples are built in: electricity demand
+>   vs. temperature and wind (2-D), and price by hour of day (1-D).
+>
+> When the target only depends on x (a 2-column CSV, or a formula without
+> `y`), the output panel becomes a 1-D plot. Each dot's height is its target
+> value, the line is the network's prediction, and the y features are
+> switched off. The axes show the CSV's original units.
 >
 > The noise slider jitters the inputs for formulas and the target for CSV data.
 > The source is in `src/customdata.ts`. Everything else is upstream

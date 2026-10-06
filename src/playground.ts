@@ -275,7 +275,7 @@ function makeGUI() {
     state.showTestData = this.checked;
     state.serialize();
     userHasInteracted();
-    heatMap.updateTestPoints(state.showTestData ? testData : []);
+    updateHeatmapPoints();
   });
   // Check/uncheck the checkbox according to the current state.
   showTestData.property("checked", state.showTestData);
@@ -814,6 +814,8 @@ function updateDecisionBoundary(network: nn.Node[][], firstTime: boolean) {
   }
   let xScale = d3.scale.linear().domain([0, DENSITY - 1]).range(xDomain);
   let yScale = d3.scale.linear().domain([DENSITY - 1, 0]).range(xDomain);
+  // For 1-D data the network never sees y, so evaluate it at y = 0.
+  let oneD = isOneD();
 
   let i = 0, j = 0;
   for (i = 0; i < DENSITY; i++) {
@@ -829,7 +831,7 @@ function updateDecisionBoundary(network: nn.Node[][], firstTime: boolean) {
     for (j = 0; j < DENSITY; j++) {
       // 1 for points inside the circle, and 0 for points outside the circle.
       let x = xScale(i);
-      let y = yScale(j);
+      let y = oneD ? 0 : yScale(j);
       let input = constructInput(x, y);
       nn.forwardProp(network, input);
       nn.forEachNode(network, true, node => {
@@ -866,6 +868,13 @@ function updateUI(firstStep = false) {
   let selectedId = selectedNodeId != null ?
       selectedNodeId : nn.getOutputNode(network).id;
   heatMap.updateBackground(boundary[selectedId], state.discretize);
+  if (isOneD()) {
+    // Plot the prediction; every column of the output matrix is constant.
+    heatMap.updateCurve(boundary[nn.getOutputNode(network).id]
+        .map(column => column[0] * customdata.DISPLAY_RADIUS));
+  } else {
+    heatMap.updateCurve(null);
+  }
 
   // Update all decision boundaries.
   d3.select("#network").selectAll("div.canvas")
@@ -1006,9 +1015,13 @@ function drawDatasetThumbnails() {
     canvas.setAttribute("height", h);
     let context = canvas.getContext("2d");
     let data = dataGenerator(200, 0);
+    if (dataGenerator === customdata.regressCustom) {
+      data = customdata.toDisplayPoints(data, customdata.isOneDimensional());
+    }
     data.forEach(function(d) {
       context.fillStyle = colorScale(d.label);
-      context.fillRect(w * (d.x + 6) / 12, h * (d.y + 6) / 12, 4, 4);
+      // Same orientation as the output heatmap (y up).
+      context.fillRect(w * (d.x + 6) / 12, h * (6 - d.y) / 12, 4, 4);
     });
     d3.select(canvas.parentNode).style("display", null);
   }
@@ -1116,6 +1129,38 @@ function initCustomData() {
   }
 }
 
+/** Whether the current data is a custom dataset that only depends on x. */
+function isOneD(): boolean {
+  return state.problem === Problem.REGRESSION &&
+      state.regDataset === customdata.regressCustom &&
+      customdata.isOneDimensional();
+}
+
+/** Features that depend on y, which carry no information for 1-D data. */
+const Y_FEATURES = ["y", "ySquared", "xTimesY", "sinY"];
+const X_FEATURES = ["x", "xSquared", "sinX"];
+/** Y features turned off automatically for 1-D data, to restore later. */
+let autoDisabledFeatures: string[] = null;
+
+/**
+ * Turns off the y features when switching to 1-D data and turns them back on
+ * when switching away. Callers reset the network afterwards.
+ */
+function syncOneDFeatures() {
+  if (isOneD()) {
+    if (autoDisabledFeatures == null) {
+      autoDisabledFeatures = Y_FEATURES.filter(id => id in INPUTS && state[id]);
+      autoDisabledFeatures.forEach(id => state[id] = false);
+      if (!X_FEATURES.some(id => id in INPUTS && state[id]) && "x" in INPUTS) {
+        state.x = true;
+      }
+    }
+  } else if (autoDisabledFeatures != null) {
+    autoDisabledFeatures.forEach(id => state[id] = true);
+    autoDisabledFeatures = null;
+  }
+}
+
 function updateCustomEditButton() {
   let show = state.problem === Problem.REGRESSION &&
       state.regDataset === customdata.regressCustom;
@@ -1169,8 +1214,27 @@ function makeCustomEditor() {
           ctx.fillRect(i, j, cell, cell);
         }
       }
+      if (draftFormula.oneDimensional) {
+        // Plot f(x) on top of the stripes.
+        ctx.strokeStyle = "#333";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i <= w; i++) {
+          let v = draftFormula.fn(i / w * 12 - 6, 0);
+          let label = hi - lo < 1e-12 ? 0 : (v - lo) / (hi - lo) * 2 - 1;
+          let py = h * (6 - label * customdata.DISPLAY_RADIUS) / 12;
+          if (i === 0) {
+            ctx.moveTo(i, py);
+          } else {
+            ctx.lineTo(i, py);
+          }
+        }
+        ctx.stroke();
+      }
     } else if (draftSource === "csv" && draftCsv != null) {
-      let points = customdata.generate("csv", null, draftCsv, 0, 0);
+      let points = customdata.toDisplayPoints(
+          customdata.generate("csv", null, draftCsv, 0, 0),
+          draftCsv.oneDimensional);
       points.forEach(d => {
         ctx.fillStyle = colorScale(d.label) as any;
         ctx.fillRect(w * (d.x + 6) / 12 - 2, h * (6 - d.y) / 12 - 2, 4, 4);
@@ -1293,6 +1357,10 @@ function makeCustomEditor() {
     csvInput.property("value", customdata.exampleCsv());
     validate();
   });
+  d3.select("#custom-csv-example-1d").on("click", () => {
+    csvInput.property("value", customdata.exampleLmpCsv());
+    validate();
+  });
   d3.select("#custom-csv-clear").on("click", () => {
     csvInput.property("value", "");
     validate();
@@ -1351,8 +1419,23 @@ function generateData(firstTime = false) {
   let splitIndex = Math.floor(data.length * state.percTrainData / 100);
   trainData = data.slice(0, splitIndex);
   testData = data.slice(splitIndex);
-  heatMap.updatePoints(trainData);
-  heatMap.updateTestPoints(state.showTestData ? testData : []);
+  syncOneDFeatures();
+  updateHeatmapPoints();
+}
+
+function updateHeatmapPoints() {
+  let oneD = isOneD();
+  heatMap.updatePoints(customdata.toDisplayPoints(trainData, oneD));
+  heatMap.updateTestPoints(state.showTestData ?
+      customdata.toDisplayPoints(testData, oneD) : []);
+  let custom = state.problem === Problem.REGRESSION &&
+      state.regDataset === customdata.regressCustom;
+  let axes = custom ? customdata.axisDomains() : {x: null, y: null};
+  heatMap.setAxisDomains(axes.x, axes.y);
+  d3.select("#oned-note").style("display", oneD ? null : "none");
+  if (!oneD) {
+    heatMap.updateCurve(null);
+  }
 }
 
 let firstInteraction = true;

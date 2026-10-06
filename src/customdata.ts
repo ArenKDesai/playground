@@ -370,7 +370,7 @@ export function parseCsv(text: string): CsvData {
   let st = rescaler(targetRange, 1);
   let points: Example2D[] = rows.map((r, i) => ({
     x: sx(xs[i]),
-    // 1-D data has no y; it is filled in with random jitter on generation.
+    // 1-D data has no y; the network only gets x.
     y: oneDimensional ? 0 : sy(ys[i]),
     label: st(ts[i])
   }));
@@ -406,13 +406,29 @@ export function exampleCsv(): string {
   return lines.join("\n");
 }
 
+/** A built-in 1-D example: electricity price ($/MWh) by hour ending. */
+export function exampleLmpCsv(): string {
+  let lmp = [21.48, 19.79, 20.21, 20.19, 22.06, 30.67, 45.71, 39.28, 28.2,
+      30.06, 32.3, 30.8, 31.65, 33.17, 30.93, 33.38, 40.58, 112.65, 160.21,
+      70.62, 48.31, 34.83, 29.69, 26.98];
+  return ["hour_ending,lmp"].concat(lmp.map((v, i) => `${i + 1},${v}`))
+      .join("\n");
+}
+
 // ---------------------------------------------------------------------------
 // The dataset generator.
 // ---------------------------------------------------------------------------
 
+
+/**
+ * Data whose target only depends on x is shown as a 1-D plot: the vertical
+ * axis of the output heatmap shows the target, mapped by this factor from
+ * [-1, 1].
+ */
+export const DISPLAY_RADIUS = CSV_RADIUS;
+
 let source: Source = "formula";
-let formulaFn: Expr = compileFormula(DEFAULT_FORMULA);
-let formulaRange: [number, number] = sampleRange(formulaFn);
+let formula: FormulaInfo = prepareFormula(DEFAULT_FORMULA);
 let csvData: CsvData = null;
 
 /** Range of f over a grid on the domain, used to rescale to [-1, 1]. */
@@ -434,18 +450,38 @@ function sampleRange(f: Expr): [number, number] {
   return [lo, hi];
 }
 
-export type FormulaInfo = {fn: Expr, range: [number, number]};
+/** True when f(x, y) does not depend on y on a sample grid. */
+function ignoresY(f: Expr): boolean {
+  let n = 24;
+  for (let i = 0; i <= n; i++) {
+    let x = -RADIUS + 2 * RADIUS * i / n;
+    let v0 = f(x, 0);
+    for (let j = 0; j <= n; j++) {
+      let v = f(x, -RADIUS + 2 * RADIUS * j / n);
+      if (isFinite(v) !== isFinite(v0) ||
+          (isFinite(v) && Math.abs(v - v0) > 1e-9 * (1 + Math.abs(v0)))) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+export type FormulaInfo = {
+  fn: Expr,
+  range: [number, number],
+  oneDimensional: boolean
+};
 
 /** Compiles and validates a formula, returning it with its output range. */
 export function prepareFormula(src: string): FormulaInfo {
   let fn = compileFormula(src);
-  return {fn, range: sampleRange(fn)};
+  return {fn, range: sampleRange(fn), oneDimensional: ignoresY(fn)};
 }
 
 export function setFormula(info: FormulaInfo) {
   source = "formula";
-  formulaFn = info.fn;
-  formulaRange = info.range;
+  formula = info;
 }
 
 export function setCsv(data: CsvData) {
@@ -457,22 +493,75 @@ export function getSource(): Source {
   return source;
 }
 
+/** Whether the active custom dataset only depends on x. */
+export function isOneDimensional(): boolean {
+  return source === "csv" && csvData != null ? csvData.oneDimensional :
+      formula.oneDimensional;
+}
+
+/** Moves 1-D points so their height shows the target value. */
+export function toDisplayPoints(points: Example2D[], oneDimensional: boolean):
+    Example2D[] {
+  if (!oneDimensional) {
+    return points;
+  }
+  return points.map(p => ({x: p.x, y: p.label * DISPLAY_RADIUS,
+      label: p.label}));
+}
+
+/**
+ * Maps the playground domain [-6, 6] back to original units, given that
+ * [lo, hi] was rescaled to [-radius, radius].
+ */
+function originalDomain(r: [number, number], radius: number):
+    [number, number] {
+  if (r == null || r[1] - r[0] < 1e-12) {
+    return null;
+  }
+  let toOrig = (v: number) => r[0] + (v / radius + 1) / 2 * (r[1] - r[0]);
+  return [toOrig(-RADIUS), toOrig(RADIUS)];
+}
+
+/**
+ * Axis domains (in original units) for the output heatmap of the active
+ * custom dataset. null means the default [-6, 6] axis.
+ */
+export function axisDomains(): {x: [number, number], y: [number, number]} {
+  if (source === "csv" && csvData != null) {
+    return {
+      x: originalDomain(csvData.xRange, CSV_RADIUS),
+      y: csvData.oneDimensional ?
+          originalDomain(csvData.targetRange, DISPLAY_RADIUS) :
+          originalDomain(csvData.yRange, CSV_RADIUS)
+    };
+  }
+  return {
+    x: null,
+    y: formula.oneDimensional ?
+        originalDomain(formula.range, DISPLAY_RADIUS) : null
+  };
+}
+
 function randUniform(a: number, b: number) {
   return Math.random() * (b - a) + a;
 }
 
-/** Generates points for an arbitrary formula / CSV source. */
-export function generate(src: Source, formula: FormulaInfo, csv: CsvData,
+/**
+ * Generates points for an arbitrary formula / CSV source. For 1-D data the
+ * y input is always 0, so the network can only use x.
+ */
+export function generate(src: Source, info: FormulaInfo, csv: CsvData,
     numSamples: number, noise: number): Example2D[] {
   let points: Example2D[] = [];
   if (src === "formula") {
-    let scale = rescaler(formula.range, 1);
+    let scale = rescaler(info.range, 1);
     for (let i = 0; i < numSamples; i++) {
       let x = randUniform(-RADIUS, RADIUS);
-      let y = randUniform(-RADIUS, RADIUS);
+      let y = info.oneDimensional ? 0 : randUniform(-RADIUS, RADIUS);
       let noiseX = randUniform(-RADIUS, RADIUS) * noise;
-      let noiseY = randUniform(-RADIUS, RADIUS) * noise;
-      let v = formula.fn(x + noiseX, y + noiseY);
+      let noiseY = info.oneDimensional ? 0 :
+          randUniform(-RADIUS, RADIUS) * noise;
+      let v = info.fn(x + noiseX, y + noiseY);
       if (!isFinite(v)) {
         continue;
       }
@@ -495,11 +584,7 @@ export function generate(src: Source, formula: FormulaInfo, csv: CsvData,
   }
   for (let p of rows) {
     let label = p.label + randUniform(-2, 2) * noise;
-    points.push({
-      x: p.x,
-      y: csv.oneDimensional ? randUniform(-CSV_RADIUS, CSV_RADIUS) : p.y,
-      label: Math.max(-1, Math.min(1, label))
-    });
+    points.push({x: p.x, y: p.y, label: Math.max(-1, Math.min(1, label))});
   }
   return points;
 }
@@ -510,6 +595,5 @@ export function regressCustom(numSamples: number, noise: number):
   if (source === "csv" && csvData != null) {
     return generate("csv", null, csvData, numSamples, noise);
   }
-  return generate("formula", {fn: formulaFn, range: formulaRange}, null,
-      numSamples, noise);
+  return generate("formula", formula, null, numSamples, noise);
 }

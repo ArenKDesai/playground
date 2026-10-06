@@ -1230,3 +1230,16 @@ footer .links a:hover {
   opacity: 0.4;
   cursor: default;
 }
+
+#heatmap path.curve {
+  fill: none;
+  stroke: #333;
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+#main-part #oned-note {
+  width: 260px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}

@@ -281,6 +281,10 @@ limitations under the License.
       </div>
       <div id="heatmap"></div>
       <div style="float:left;margin-top:20px">
+        <div id="oned-note" class="label" style="display:none">
+          1-D data: each dot's height is its target value and the line is the
+          network's prediction.
+        </div>
         <div style="display:flex; align-items:center;">
 
           <!-- Gradient color scale -->
@@ -436,10 +440,11 @@ limitations under the License.
             <div class="csv-buttons">
               <button id="custom-csv-upload">Upload file&hellip;</button>
               <input type="file" id="custom-csv-file" accept=".csv,.tsv,.txt,text/csv,text/plain">
-              <button id="custom-csv-example">Load example</button>
+              <button id="custom-csv-example">Example: demand</button>
+              <button id="custom-csv-example-1d">Example: hourly price (1-D)</button>
               <button id="custom-csv-clear">Clear</button>
             </div>
-            <p class="hint">CSV data stays in your browser (saved in local storage); it is not put in the shareable URL. Files over 3000 rows are randomly subsampled. For 1-D data, uncheck the <code>X&#8322;</code> feature.</p>
+            <p class="hint">CSV data stays in your browser (saved in local storage); it is not put in the shareable URL. Files over 3000 rows are randomly subsampled. 1-D data is plotted with the target on the vertical axis, and the <code>X&#8322;</code> features are switched off.</p>
           </div>
         </div>
         <div class="custom-preview">

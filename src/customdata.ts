@@ -382,31 +382,7 @@ export function parseCsv(text: string): CsvData {
   };
 }
 
-/**
- * A built-in example CSV: a noisy "hill and valley" surface sampled at
- * irregular points, in raw units that get rescaled on load. Uses its own
- * deterministic generator so it does not depend on the global seed.
- */
-export function exampleCsv(): string {
-  let s = 12345;
-  let rand = () => {
-    s = (s * 1103515245 + 12345) % 2147483648;
-    return s / 2147483648;
-  };
-  let lines = ["temperature_c,wind_mps,demand_mw"];
-  for (let i = 0; i < 600; i++) {
-    let temp = -10 + rand() * 50;
-    let wind = rand() * 15;
-    // V-shaped demand in temperature (heating + cooling degree days), wind
-    // adds chill on cold days.
-    let demand = 800 + 40 * Math.sqrt(Math.pow(temp - 15, 2) + 9) +
-        (temp < 10 ? wind * (10 - temp) * 1.2 : 0) + (rand() - 0.5) * 80;
-    lines.push(`${temp.toFixed(1)},${wind.toFixed(1)},${demand.toFixed(0)}`);
-  }
-  return lines.join("\n");
-}
-
-/** A built-in 1-D example: electricity price ($/MWh) by hour ending. */
+/** An example CSV: electricity price ($/MWh) by hour ending. */
 export function exampleLmpCsv(): string {
   let lmp = [21.48, 19.79, 20.21, 20.19, 22.06, 30.67, 45.71, 39.28, 28.2,
       30.06, 32.3, 30.8, 31.65, 33.17, 30.93, 33.38, 40.58, 112.65, 160.21,
@@ -526,19 +502,24 @@ function originalDomain(r: [number, number], radius: number):
  * Axis domains (in original units) for the output heatmap of the active
  * custom dataset. null means the default [-6, 6] axis.
  */
-export function axisDomains(): {x: [number, number], y: [number, number]} {
+export function axisDomains(): AxisInfo {
   if (source === "csv" && csvData != null) {
+    let c = csvData.columns;
     return {
       x: originalDomain(csvData.xRange, CSV_RADIUS),
       y: csvData.oneDimensional ?
           originalDomain(csvData.targetRange, DISPLAY_RADIUS) :
-          originalDomain(csvData.yRange, CSV_RADIUS)
+          originalDomain(csvData.yRange, CSV_RADIUS),
+      xLabel: c[0],
+      yLabel: csvData.oneDimensional ? c[c.length - 1] : c[1]
     };
   }
+  let oneD = formula.oneDimensional;
   return {
     x: null,
-    y: formula.oneDimensional ?
-        originalDomain(formula.range, DISPLAY_RADIUS) : null
+    y: oneD ? originalDomain(formula.range, DISPLAY_RADIUS) : null,
+    xLabel: "x",
+    yLabel: oneD ? "f(x)" : "y"
   };
 }
 
@@ -588,6 +569,58 @@ export function generate(src: Source, info: FormulaInfo, csv: CsvData,
   }
   return points;
 }
+
+// ---------------------------------------------------------------------------
+// Built-in example: locational marginal prices (LMPs) by hour of day.
+// ---------------------------------------------------------------------------
+
+/** Price range ($/MWh) that is mapped onto the [-1, 1] target range. */
+export const LMP_PRICE_RANGE: [number, number] = [-30, 190];
+const LMP_HOUR_RANGE: [number, number] = [0, 24];
+
+function bump(h: number, center: number, width: number): number {
+  return Math.exp(-Math.pow(h - center, 2) / (2 * width * width));
+}
+
+/**
+ * An exaggerated "duck curve": cheap overnight power, a morning ramp,
+ * negative prices when solar floods the grid at midday, and a scarcity spike
+ * when the sun sets and demand peaks. `spike` scales the evening peak.
+ */
+export function lmpCurve(hour: number, spike = 1): number {
+  return 28 - 6 * bump(hour, 3, 2) + 30 * bump(hour, 7.5, 1.3) -
+      45 * bump(hour, 13, 2.2) + spike * 120 * bump(hour, 19, 1.3);
+}
+
+/** Simulated real-time LMPs sampled at random times over many days. */
+export function regressLmp(numSamples: number, noise: number): Example2D[] {
+  let toX = rescaler(LMP_HOUR_RANGE, CSV_RADIUS);
+  let toLabel = rescaler(LMP_PRICE_RANGE, 1);
+  let points: Example2D[] = [];
+  for (let i = 0; i < numSamples; i++) {
+    let hour = randUniform(0, 24);
+    // Some days the evening peak is tamer, some days it is brutal.
+    let price = lmpCurve(hour, randUniform(0.7, 1.3)) +
+        randUniform(-4, 4) + randUniform(-60, 60) * noise;
+    let label = Math.max(-1, Math.min(1, toLabel(price)));
+    points.push({x: toX(hour), y: 0, label});
+  }
+  return points;
+}
+
+export type AxisInfo = {
+  x: [number, number],
+  y: [number, number],
+  xLabel: string,
+  yLabel: string
+};
+
+export const LMP_AXES: AxisInfo = {
+  x: originalDomain(LMP_HOUR_RANGE, CSV_RADIUS),
+  y: originalDomain(LMP_PRICE_RANGE, DISPLAY_RADIUS),
+  xLabel: "Hour of day",
+  yLabel: "LMP ($/MWh)"
+};
 
 /** DataGenerator for the "Custom" regression thumbnail. */
 export function regressCustom(numSamples: number, noise: number):

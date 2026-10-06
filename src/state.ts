@@ -35,19 +35,10 @@ export let regularizations: {[key: string]: nn.RegularizationFunction} = {
   "L2": nn.RegularizationFunction.L2
 };
 
-/** A map between dataset names and functions that generate classification data. */
-export let datasets: {[key: string]: dataset.DataGenerator} = {
-  "circle": dataset.classifyCircleData,
-  "xor": dataset.classifyXORData,
-  "gauss": dataset.classifyTwoGaussData,
-  "spiral": dataset.classifySpiralData,
-};
-
-/** A map between dataset names and functions that generate regression data. */
+/** A map between dataset names and functions that generate the data. */
 export let regDatasets: {[key: string]: dataset.DataGenerator} = {
-  "reg-plane": dataset.regressPlane,
-  "reg-gauss": dataset.regressGaussian,
-  "reg-custom": customdata.regressCustom
+  "lmp": customdata.regressLmp,
+  "custom": customdata.regressCustom
 };
 
 export function getKeyFromValue(obj: any, value: any): string {
@@ -86,16 +77,6 @@ export enum Type {
   OBJECT
 }
 
-export enum Problem {
-  CLASSIFICATION,
-  REGRESSION
-}
-
-export let problems = {
-  "classification": Problem.CLASSIFICATION,
-  "regression": Problem.REGRESSION
-};
-
 export interface Property {
   name: string;
   type: Type;
@@ -109,7 +90,6 @@ export class State {
     {name: "activation", type: Type.OBJECT, keyMap: activations},
     {name: "regularization", type: Type.OBJECT, keyMap: regularizations},
     {name: "batchSize", type: Type.NUMBER},
-    {name: "dataset", type: Type.OBJECT, keyMap: datasets},
     {name: "regDataset", type: Type.OBJECT, keyMap: regDatasets},
     {name: "learningRate", type: Type.NUMBER},
     {name: "regularizationRate", type: Type.NUMBER},
@@ -117,7 +97,6 @@ export class State {
     {name: "networkShape", type: Type.ARRAY_NUMBER},
     {name: "seed", type: Type.STRING},
     {name: "showTestData", type: Type.BOOLEAN},
-    {name: "discretize", type: Type.BOOLEAN},
     {name: "percTrainData", type: Type.NUMBER},
     {name: "x", type: Type.BOOLEAN},
     {name: "y", type: Type.BOOLEAN},
@@ -130,7 +109,6 @@ export class State {
     {name: "sinY", type: Type.BOOLEAN},
     {name: "collectStats", type: Type.BOOLEAN},
     {name: "tutorial", type: Type.STRING},
-    {name: "problem", type: Type.OBJECT, keyMap: problems},
     {name: "initZero", type: Type.BOOLEAN},
     {name: "hideText", type: Type.BOOLEAN},
     {name: "regSource", type: Type.STRING},
@@ -138,25 +116,23 @@ export class State {
   ];
 
   [key: string]: any;
-  learningRate = 0.03;
+  learningRate = 0.01;
   regularizationRate = 0;
   showTestData = false;
   noise = 0;
   batchSize = 10;
-  discretize = false;
   tutorial: string = null;
-  percTrainData = 50;
+  percTrainData = 70;
   activation = nn.Activations.TANH;
   regularization: nn.RegularizationFunction = null;
-  problem = Problem.CLASSIFICATION;
   initZero = false;
   hideText = false;
   collectStats = false;
   numHiddenLayers = 1;
   hiddenLayerControls: any[] = [];
-  networkShape: number[] = [4, 2];
+  networkShape: number[] = [8, 4];
   x = true;
-  y = true;
+  y = false;
   xTimesY = false;
   xSquared = false;
   ySquared = false;
@@ -164,8 +140,7 @@ export class State {
   sinX = false;
   cosY = false;
   sinY = false;
-  dataset: dataset.DataGenerator = dataset.classifyCircleData;
-  regDataset: dataset.DataGenerator = dataset.regressPlane;
+  regDataset: dataset.DataGenerator = customdata.regressLmp;
   /** Source of the custom regression dataset: "formula" or "csv". */
   regSource: customdata.Source = "formula";
   regFormula = customdata.DEFAULT_FORMULA;

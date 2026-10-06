@@ -18,31 +18,22 @@ limitations under the License.
   <link rel="icon" type="image/png" href="favicon.png">
   <meta charset="utf-8">
   <meta name="viewport" content="width=1024">
-  <meta name="keywords" content="neural networks,machine learning,javascript">
+  <meta name="keywords" content="neural networks,machine learning,electricity prices,LMP,javascript">
 
   <meta property="og:type" content="article"/>
-  <meta property="og:title" content="Tensorflow — Neural Network Playground"/>
-  <meta property="og:description" content="Tinker with a real neural network right here in your browser.">
-  <meta property="og:url" content="http://playground.tensorflow.org"/>
-  <meta property="og:image" content="http://playground.tensorflow.org/preview.png"/>
+  <meta property="og:title" content="Neural Network Playground: Predicting Electricity Prices"/>
+  <meta property="og:description" content="Watch a neural network learn the daily shape of electricity prices (LMPs) right in your browser.">
+  <meta property="og:url" content="https://arenkdesai.github.io/playground/"/>
 
-  <meta name="twitter:card" value="summary_large_image">
-  <meta name="twitter:title" content="Tensorflow — Neural Network Playground">
-  <meta name="twitter:description" content="Tinker with a real neural network right here in your browser.">
-  <meta name="twitter:url" content="http://playground.tensorflow.org">
-  <meta name="twitter:image" content="http://playground.tensorflow.org/preview.png">
-  <meta name="twitter:image:width" content="560">
-  <meta name="twitter:image:height" content="295">
-
-  <meta name="author" content="Daniel Smilkov and Shan Carter">
-  <title>A Neural Network Playground</title>
+  <meta name="author" content="Daniel Smilkov and Shan Carter (original); Aren Desai (LMP version)">
+  <title>Neural Network Playground: Predicting Electricity Prices</title>
   <link rel="stylesheet" href="bundle.css" type="text/css">
   <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500|Material+Icons" rel="stylesheet" type="text/css">
   <script src="lib.js"></script>
 </head>
 <body>
   <!-- GitHub link -->
-  <a class="github-link" href="https://github.com/tensorflow/playground" title="Source on GitHub" target="_blank">
+  <a class="github-link" href="https://github.com/ArenKDesai/playground" title="Source on GitHub" target="_blank">
     <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 60.5 60.5" width="60" height="60">
       <polygon class="bg" points="60.5,60.5 0,0 60.5,0 "/>
       <path class="icon" d="M43.1,5.8c-6.6,0-12,5.4-12,12c0,5.3,3.4,9.8,8.2,11.4c0.6,0.1,0.8-0.3,0.8-0.6c0-0.3,0-1,0-2c-3.3,0.7-4-1.6-4-1.6c-0.5-1.4-1.3-1.8-1.3-1.8c-1.1-0.7,0.1-0.7,0.1-0.7c1.2,0.1,1.8,1.2,1.8,1.2c1.1,1.8,2.8,1.3,3.5,1c0.1-0.8,0.4-1.3,0.8-1.6c-2.7-0.3-5.5-1.3-5.5-5.9c0-1.3,0.5-2.4,1.2-3.2c-0.1-0.3-0.5-1.5,0.1-3.2c0,0,1-0.3,3.3,1.2c1-0.3,2-0.4,3-0.4c1,0,2,0.1,3,0.4c2.3-1.6,3.3-1.2,3.3-1.2c0.7,1.7,0.2,2.9,0.1,3.2c0.8,0.8,1.2,1.9,1.2,3.2c0,4.6-2.8,5.6-5.5,5.9c0.4,0.4,0.8,1.1,0.8,2.2c0,1.6,0,2.9,0,3.3c0,0.3,0.2,0.7,0.8,0.6c4.8-1.6,8.2-6.1,8.2-11.4C55.1,11.2,49.7,5.8,43.1,5.8z"/>
@@ -50,7 +41,7 @@ limitations under the License.
   </a>
   <!-- Header -->
   <header>
-    <h1 class="l--page">Tinker With a <b>Neural Network</b> <span class="optional">Right Here </span>in Your Browser.<br>Don’t Worry, You Can’t Break It. We Promise.</h1>
+    <h1 class="l--page">Watch a <b>Neural Network</b> Learn <span class="optional">to Predict </span>Electricity Prices.<br>Press Play, or Bring Your Own Data.</h1>
   </header>
 
   <!-- Top Controls -->
@@ -128,15 +119,6 @@ limitations under the License.
           </select>
         </div>
       </div>
-      <div class="control ui-problem">
-        <label for="problem">Problem type</label>
-        <div class="select">
-          <select id="problem">
-            <option value="classification">Classification</option>
-            <option value="regression">Regression</option>
-          </select>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -151,26 +133,11 @@ limitations under the License.
       <div class="ui-dataset">
         <p>Which dataset do you want to use?</p>
         <div class="dataset-list">
-          <div class="dataset" title="Circle">
-            <canvas class="data-thumbnail" data-dataset="circle"></canvas>
-          </div>
-          <div class="dataset" title="Exclusive or">
-            <canvas class="data-thumbnail" data-dataset="xor"></canvas>
-          </div>
-          <div class="dataset" title="Gaussian">
-            <canvas class="data-thumbnail" data-dataset="gauss"></canvas>
-          </div>
-          <div class="dataset" title="Spiral">
-            <canvas class="data-thumbnail" data-dataset="spiral"></canvas>
-          </div>
-          <div class="dataset" title="Plane">
-            <canvas class="data-thumbnail" data-regDataset="reg-plane"></canvas>
-          </div>
-          <div class="dataset" title="Multi gaussian">
-            <canvas class="data-thumbnail" data-regDataset="reg-gauss"></canvas>
+          <div class="dataset" title="Example: electricity prices (LMP) by hour of day">
+            <canvas class="data-thumbnail" data-regDataset="lmp"></canvas>
           </div>
           <div class="dataset" title="Custom: your own formula or CSV data">
-            <canvas class="data-thumbnail" data-regDataset="reg-custom"></canvas>
+            <canvas class="data-thumbnail" data-regDataset="custom"></canvas>
           </div>
         </div>
         <button class="basic-button custom-edit-button" id="custom-edit-button" title="Edit the custom regression dataset">
@@ -310,10 +277,6 @@ limitations under the License.
             <input type="checkbox" id="show-test-data" class="mdl-checkbox__input" checked>
             <span class="mdl-checkbox__label label">Show test data</span>
           </label>
-          <label class="ui-discretize mdl-checkbox mdl-js-checkbox mdl-js-ripple-effect" for="discretize">
-            <input type="checkbox" id="discretize" class="mdl-checkbox__input" checked>
-            <span class="mdl-checkbox__label label">Discretize output</span>
-          </label>
         </div>
       </div>
     </div>
@@ -331,23 +294,35 @@ limitations under the License.
 
   <article id="article-text">
     <div class="l--body">
-      <h2>Um, What Is a Neural Network?</h2>
-      <p>It’s a technique for building a computer program that learns from data. It is based very loosely on how we think the human brain works. First, a collection of software “neurons” are created and connected together, allowing them to send messages to each other. Next, the network is asked to solve a problem, which it attempts to do over and over, each time strengthening the connections that lead to success and diminishing those that lead to failure. For a more detailed introduction to neural networks, Michael Nielsen’s <a href="http://neuralnetworksanddeeplearning.com/index.html">Neural Networks and Deep Learning</a> is a good place to start. For a more technical overview, try <a href="http://www.deeplearningbook.org/">Deep Learning</a> by Ian Goodfellow, Yoshua Bengio, and Aaron Courville.</p>
+      <h2>What Am I Looking At?</h2>
+      <p>A <b>locational marginal price</b> (LMP) is the price of delivering one more megawatt-hour of electricity to a specific point on the grid. It moves with the time of day. Power is cheap overnight and climbs with the morning ramp. At midday, solar can flood the grid and push prices below zero. In the evening the sun sets just as demand peaks, and prices spike. Grid operators call this shape the “duck curve.”</p>
+      <p>The example data is simulated and deliberately exaggerated so the shape is easy to see. Each dot is one price observation at a random time of day, taken over many days. Some evenings the peak is tame and some it is brutal, so the dots spread out around the spike.</p>
+      <p>The network gets a single input, the hour of day (X<sub>1</sub>), and has to learn the price from it. Press play and watch the black line, which is the network’s prediction, bend from a flat guess into the duck curve. Each hidden neuron learns a simple piece of the curve, like a step up or a step down at some hour, and the output layer adds the pieces together.</p>
     </div>
 
     <div class="l--body">
-      <h2>This Is Cool, Can I Repurpose It?</h2>
-      <p>Please do! We’ve open sourced it on <a href="https://github.com/tensorflow/playground">GitHub</a> with the hope that it can make neural networks a little more accessible and easier to learn. You’re free to use it in any way that follows our <a href="https://github.com/tensorflow/playground/blob/master/LICENSE">Apache License</a>. And if you have any suggestions for additions or changes, please <a href="https://github.com/tensorflow/playground/issues">let us know</a>.</p>
-      <p>We’ve also provided some controls below to enable you tailor the playground to a specific topic or lesson. Just choose which features you’d like to be visible below then save <a class="hide-controls-link" href="#">this link</a>, or <a href="javascript:location.reload();">refresh</a> the page.</p>
-      <div class="hide-controls"></div>
+      <h2>Things to Try</h2>
+      <ul>
+        <li>Remove neurons until the network can no longer fit the evening spike.</li>
+        <li>Switch the activation to ReLU and watch the prediction turn into straight line segments.</li>
+        <li>Add the X<sub>1</sub><sup>2</sup> or sin(X<sub>1</sub>) features and compare how fast the loss drops.</li>
+        <li>Turn on “Show test data”, then try to make the network overfit: use less training data and more neurons until the test loss climbs above the training loss.</li>
+        <li>Click the <b>Custom</b> thumbnail to type a formula or paste a CSV of your own prices.</li>
+      </ul>
     </div>
 
     <div class="l--body">
       <h2>What Do All the Colors Mean?</h2>
-      <p>Orange and blue are used throughout the visualization in slightly different ways, but in general orange shows negative values while blue shows positive values.</p>
-      <p>The data points (represented by small circles) are initially colored orange or blue, which correspond to positive one and negative one.</p>
-      <p>In the hidden layers, the lines are colored by the weights of the connections between neurons. Blue shows a positive weight, which means the network is using that output of the neuron as given. An orange line shows that the network is assiging a negative weight.</p>
-      <p>In the output layer, the dots are colored orange or blue depending on their original values. The background color shows what the network is predicting for a particular area. The intensity of the color shows how confident that prediction is.</p>
+      <p>Orange shows low values and blue shows high values.</p>
+      <p>In the output plot, each dot’s height and color show its price. The background shows the price the network predicts at each hour, and the black line traces the same prediction.</p>
+      <p>In the network, the lines are colored by the weights of the connections between neurons. Blue is a positive weight and orange is a negative one; thicker lines are larger weights. Each neuron’s small square shows what that neuron outputs across the hours of the day.</p>
+    </div>
+
+    <div class="l--body">
+      <h2>Can I Use It for a Class or Talk?</h2>
+      <p>Please do. This is a modified version of TensorFlow’s <a href="https://github.com/tensorflow/playground">Neural Network Playground</a>, released under the <a href="https://github.com/ArenKDesai/playground/blob/master/LICENSE">Apache License</a>. The source is on <a href="https://github.com/ArenKDesai/playground">GitHub</a>.</p>
+      <p>You can also hide controls to tailor the page to a lesson. Choose which ones stay visible below, then save <a class="hide-controls-link" href="#">this link</a>, or <a href="javascript:location.reload();">refresh</a> the page.</p>
+      <div class="hide-controls"></div>
     </div>
 
     <div class="l--body">
@@ -361,7 +336,7 @@ limitations under the License.
     <div class="l--body">
       <h2>Credits</h2>
       <p>
-        This was created by Daniel Smilkov and Shan Carter.
+        The original playground was created by Daniel Smilkov and Shan Carter; this version adapts it to electricity prices and custom data.
         This is a continuation of many people’s previous work — most notably Andrej Karpathy’s <a href="http://cs.stanford.edu/people/karpathy/convnetjs/demo/classify2d.html">convnet.js demo</a>
         and Chris Olah’s <a href="http://colah.github.io/posts/2014-03-NN-Manifolds-Topology/">articles</a> about neural networks.
         Many thanks also to D. Sculley for help with the original idea and to Fernanda Viégas and Martin Wattenberg and the rest of the
@@ -440,8 +415,7 @@ limitations under the License.
             <div class="csv-buttons">
               <button id="custom-csv-upload">Upload file&hellip;</button>
               <input type="file" id="custom-csv-file" accept=".csv,.tsv,.txt,text/csv,text/plain">
-              <button id="custom-csv-example">Example: demand</button>
-              <button id="custom-csv-example-1d">Example: hourly price (1-D)</button>
+              <button id="custom-csv-example">Load example</button>
               <button id="custom-csv-clear">Clear</button>
             </div>
             <p class="hint">CSV data stays in your browser (saved in local storage); it is not put in the shareable URL. Files over 3000 rows are randomly subsampled. 1-D data is plotted with the target on the vertical axis, and the <code>X&#8322;</code> features are switched off.</p>

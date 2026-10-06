@@ -135,10 +135,27 @@ export class HeatMap {
    * Relabels the axes, e.g. to show the original units of custom data.
    * null keeps the default domain for that axis.
    */
-  setAxisDomains(xDomain: [number, number], yDomain: [number, number]) {
+  setAxisDomains(xDomain: [number, number], yDomain: [number, number],
+      xLabel: string = null, yLabel: string = null) {
     if (!this.settings.showAxes) {
       return;
     }
+    let [, width] = this.xScale.range();
+    let [height] = this.yScale.range();
+    let title = (cls: string) => {
+      let t = this.svg.select(`text.${cls}`);
+      return t.empty() ?
+          this.svg.append("text").attr("class", `axis-title ${cls}`) : t;
+    };
+    title("x-title")
+      .attr({x: width / 2, y: height + 34, "text-anchor": "middle"})
+      .text(xLabel || "");
+    title("y-title")
+      .attr({
+        "text-anchor": "middle",
+        transform: `translate(${width + 44},${height / 2}) rotate(90)`
+      })
+      .text(yLabel || "");
     let xScale = d3.scale.linear()
       .domain(xDomain || this.xScale.domain())
       .range(this.xScale.range());

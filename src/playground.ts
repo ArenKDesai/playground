@@ -17,13 +17,10 @@ import * as nn from "./nn";
 import {HeatMap, reduceMatrix} from "./heatmap";
 import {
   State,
-  datasets,
   regDatasets,
   activations,
-  problems,
   regularizations,
-  getKeyFromValue,
-  Problem
+  getKeyFromValue
 } from "./state";
 import {Example2D, shuffle} from "./dataset";
 import * as customdata from "./customdata";
@@ -50,8 +47,7 @@ function scrollTween(offset) {
 
 const RECT_SIZE = 30;
 const BIAS_SIZE = 5;
-const NUM_SAMPLES_CLASSIFY = 500;
-const NUM_SAMPLES_REGRESS = 1200;
+const NUM_SAMPLES = 800;
 const DENSITY = 100;
 
 enum HoverType {
@@ -75,7 +71,6 @@ let INPUTS: {[name: string]: InputFeature} = {
 
 let HIDABLE_CONTROLS = [
   ["Show test data", "showTestData"],
-  ["Discretize output", "discretize"],
   ["Play button", "playButton"],
   ["Step button", "stepButton"],
   ["Reset button", "resetButton"],
@@ -83,7 +78,6 @@ let HIDABLE_CONTROLS = [
   ["Activation", "activation"],
   ["Regularization", "regularization"],
   ["Regularization rate", "regularizationRate"],
-  ["Problem type", "problem"],
   ["Which dataset", "dataset"],
   ["Ratio train data", "percTrainData"],
   ["Noise level", "noise"],
@@ -207,25 +201,6 @@ function makeGUI() {
     parametersChanged = true;
   });
 
-  let dataThumbnails = d3.selectAll("canvas[data-dataset]");
-  dataThumbnails.on("click", function() {
-    let newDataset = datasets[this.dataset.dataset];
-    if (newDataset === state.dataset) {
-      return; // No-op.
-    }
-    state.dataset =  newDataset;
-    dataThumbnails.classed("selected", false);
-    d3.select(this).classed("selected", true);
-    generateData();
-    parametersChanged = true;
-    reset();
-  });
-
-  let datasetKey = getKeyFromValue(datasets, state.dataset);
-  // Select the dataset according to the current state.
-  d3.select(`canvas[data-dataset=${datasetKey}]`)
-    .classed("selected", true);
-
   let regDataThumbnails = d3.selectAll("canvas[data-regDataset]");
   regDataThumbnails.on("click", function() {
     let newDataset = regDatasets[this.dataset.regdataset];
@@ -279,15 +254,6 @@ function makeGUI() {
   });
   // Check/uncheck the checkbox according to the current state.
   showTestData.property("checked", state.showTestData);
-
-  let discretize = d3.select("#discretize").on("change", function() {
-    state.discretize = this.checked;
-    state.serialize();
-    userHasInteracted();
-    updateUI();
-  });
-  // Check/uncheck the checbox according to the current state.
-  discretize.property("checked", state.discretize);
 
   let percTrain = d3.select("#percTrainData").on("input", function() {
     state.percTrainData = this.value;
@@ -359,16 +325,6 @@ function makeGUI() {
     reset();
   });
   regularRate.property("value", state.regularizationRate);
-
-  let problem = d3.select("#problem").on("change", function() {
-    state.problem = problems[this.value];
-    generateData();
-    drawDatasetThumbnails();
-    updateCustomEditButton();
-    parametersChanged = true;
-    reset();
-  });
-  problem.property("value", getKeyFromValue(problems, state.problem));
 
   // Add scale to the gradient color map.
   let x = d3.scale.linear().domain([-1, 1]).range([0, 144]);
@@ -515,7 +471,7 @@ function drawNode(cx: number, cy: number, nodeId: string, isInput: boolean,
       div.classed("hovered", true);
       nodeGroup.classed("hovered", true);
       updateDecisionBoundary(network, false);
-      heatMap.updateBackground(boundary[nodeId], state.discretize);
+      heatMap.updateBackground(boundary[nodeId], false);
     })
     .on("mouseleave", function() {
       selectedNodeId = null;
@@ -523,7 +479,7 @@ function drawNode(cx: number, cy: number, nodeId: string, isInput: boolean,
       nodeGroup.classed("hovered", false);
       updateDecisionBoundary(network, false);
       heatMap.updateBackground(boundary[nn.getOutputNode(network).id],
-          state.discretize);
+          false);
     });
   if (isInput) {
     div.on("click", function() {
@@ -867,7 +823,7 @@ function updateUI(firstStep = false) {
   updateDecisionBoundary(network, firstStep);
   let selectedId = selectedNodeId != null ?
       selectedNodeId : nn.getOutputNode(network).id;
-  heatMap.updateBackground(boundary[selectedId], state.discretize);
+  heatMap.updateBackground(boundary[selectedId], false);
   if (isOneD()) {
     // Plot the prediction; every column of the output matrix is constant.
     heatMap.updateCurve(boundary[nn.getOutputNode(network).id]
@@ -880,7 +836,7 @@ function updateUI(firstStep = false) {
   d3.select("#network").selectAll("div.canvas")
       .each(function(data: {heatmap: HeatMap, id: string}) {
     data.heatmap.updateBackground(reduceMatrix(boundary[data.id], 10),
-        state.discretize);
+        false);
   });
 
   function zeroPad(n: number): string {
@@ -970,9 +926,7 @@ function reset(onStartup=false) {
   iter = 0;
   let numInputs = constructInput(0 , 0).length;
   let shape = [numInputs].concat(state.networkShape).concat([1]);
-  let outputActivation = (state.problem === Problem.REGRESSION) ?
-      nn.Activations.LINEAR : nn.Activations.TANH;
-  network = nn.buildNetwork(shape, state.activation, outputActivation,
+  network = nn.buildNetwork(shape, state.activation, nn.Activations.LINEAR,
       state.regularization, constructInputIds(), state.initZero);
   lossTrain = getLoss(network, trainData);
   lossTest = getLoss(network, testData);
@@ -1015,9 +969,7 @@ function drawDatasetThumbnails() {
     canvas.setAttribute("height", h);
     let context = canvas.getContext("2d");
     let data = dataGenerator(200, 0);
-    if (dataGenerator === customdata.regressCustom) {
-      data = customdata.toDisplayPoints(data, customdata.isOneDimensional());
-    }
+    data = customdata.toDisplayPoints(data, isOneDGenerator(dataGenerator));
     data.forEach(function(d) {
       context.fillStyle = colorScale(d.label);
       // Same orientation as the output heatmap (y up).
@@ -1025,23 +977,10 @@ function drawDatasetThumbnails() {
     });
     d3.select(canvas.parentNode).style("display", null);
   }
-  d3.selectAll(".dataset").style("display", "none");
-
-  if (state.problem === Problem.CLASSIFICATION) {
-    for (let dataset in datasets) {
-      let canvas: any =
-          document.querySelector(`canvas[data-dataset=${dataset}]`);
-      let dataGenerator = datasets[dataset];
-      renderThumbnail(canvas, dataGenerator);
-    }
-  }
-  if (state.problem === Problem.REGRESSION) {
-    for (let regDataset in regDatasets) {
-      let canvas: any =
-          document.querySelector(`canvas[data-regDataset=${regDataset}]`);
-      let dataGenerator = regDatasets[regDataset];
-      renderThumbnail(canvas, dataGenerator);
-    }
+  for (let regDataset in regDatasets) {
+    let canvas: any =
+        document.querySelector(`canvas[data-regDataset=${regDataset}]`);
+    renderThumbnail(canvas, regDatasets[regDataset]);
   }
 }
 
@@ -1097,7 +1036,7 @@ function loadStoredCsv(): string {
   } catch (e) {
     // Local storage can be unavailable (e.g. privacy mode).
   }
-  return customdata.exampleCsv();
+  return customdata.exampleLmpCsv();
 }
 
 /** Returns false when the CSV could not be persisted. */
@@ -1129,41 +1068,47 @@ function initCustomData() {
   }
 }
 
-/** Whether the current data is a custom dataset that only depends on x. */
+/** Whether data from this generator only depends on x. */
+function isOneDGenerator(generator: (n: number, noise: number) => Example2D[]):
+    boolean {
+  return generator === customdata.regressLmp ||
+      (generator === customdata.regressCustom &&
+      customdata.isOneDimensional());
+}
+
+/** Whether the current data only depends on x. */
 function isOneD(): boolean {
-  return state.problem === Problem.REGRESSION &&
-      state.regDataset === customdata.regressCustom &&
-      customdata.isOneDimensional();
+  return isOneDGenerator(state.regDataset);
 }
 
 /** Features that depend on y, which carry no information for 1-D data. */
 const Y_FEATURES = ["y", "ySquared", "xTimesY", "sinY"];
 const X_FEATURES = ["x", "xSquared", "sinX"];
-/** Y features turned off automatically for 1-D data, to restore later. */
-let autoDisabledFeatures: string[] = null;
+let lastOneD: boolean = null;
 
 /**
- * Turns off the y features when switching to 1-D data and turns them back on
- * when switching away. Callers reset the network afterwards.
+ * Turns off the y features when switching to 1-D data, and makes sure one is
+ * on when switching to 2-D data. Callers reset the network afterwards.
  */
 function syncOneDFeatures() {
-  if (isOneD()) {
-    if (autoDisabledFeatures == null) {
-      autoDisabledFeatures = Y_FEATURES.filter(id => id in INPUTS && state[id]);
-      autoDisabledFeatures.forEach(id => state[id] = false);
-      if (!X_FEATURES.some(id => id in INPUTS && state[id]) && "x" in INPUTS) {
-        state.x = true;
-      }
+  let oneD = isOneD();
+  if (oneD === lastOneD) {
+    return;
+  }
+  lastOneD = oneD;
+  let has = (ids: string[]) => ids.some(id => id in INPUTS && state[id]);
+  if (oneD) {
+    Y_FEATURES.forEach(id => state[id] = false);
+    if (!has(X_FEATURES) && "x" in INPUTS) {
+      state.x = true;
     }
-  } else if (autoDisabledFeatures != null) {
-    autoDisabledFeatures.forEach(id => state[id] = true);
-    autoDisabledFeatures = null;
+  } else if (!has(Y_FEATURES) && "y" in INPUTS) {
+    state.y = true;
   }
 }
 
 function updateCustomEditButton() {
-  let show = state.problem === Problem.REGRESSION &&
-      state.regDataset === customdata.regressCustom;
+  let show = state.regDataset === customdata.regressCustom;
   d3.select("#custom-edit-button").style("display", show ? "block" : null);
 }
 
@@ -1315,7 +1260,7 @@ function makeCustomEditor() {
     state.regSource = draftSource;
     state.regDataset = customdata.regressCustom;
     d3.selectAll("canvas[data-regDataset]").classed("selected", false);
-    d3.select("canvas[data-regDataset=reg-custom]").classed("selected", true);
+    d3.select("canvas[data-regDataset=custom]").classed("selected", true);
     close();
     if (note) {
       alert(note);
@@ -1354,10 +1299,6 @@ function makeCustomEditor() {
     validate();
   });
   d3.select("#custom-csv-example").on("click", () => {
-    csvInput.property("value", customdata.exampleCsv());
-    validate();
-  });
-  d3.select("#custom-csv-example-1d").on("click", () => {
     csvInput.property("value", customdata.exampleLmpCsv());
     validate();
   });
@@ -1408,11 +1349,7 @@ function generateData(firstTime = false) {
     userHasInteracted();
   }
   Math.seedrandom(state.seed);
-  let numSamples = (state.problem === Problem.REGRESSION) ?
-      NUM_SAMPLES_REGRESS : NUM_SAMPLES_CLASSIFY;
-  let generator = state.problem === Problem.CLASSIFICATION ?
-      state.dataset : state.regDataset;
-  let data = generator(numSamples, state.noise / 100);
+  let data = state.regDataset(NUM_SAMPLES, state.noise / 100);
   // Shuffle the data in-place.
   shuffle(data);
   // Split into train and test data.
@@ -1428,10 +1365,9 @@ function updateHeatmapPoints() {
   heatMap.updatePoints(customdata.toDisplayPoints(trainData, oneD));
   heatMap.updateTestPoints(state.showTestData ?
       customdata.toDisplayPoints(testData, oneD) : []);
-  let custom = state.problem === Problem.REGRESSION &&
-      state.regDataset === customdata.regressCustom;
-  let axes = custom ? customdata.axisDomains() : {x: null, y: null};
-  heatMap.setAxisDomains(axes.x, axes.y);
+  let axes = state.regDataset === customdata.regressLmp ?
+      customdata.LMP_AXES : customdata.axisDomains();
+  heatMap.setAxisDomains(axes.x, axes.y, axes.xLabel, axes.yLabel);
   d3.select("#oned-note").style("display", oneD ? null : "none");
   if (!oneD) {
     heatMap.updateCurve(null);

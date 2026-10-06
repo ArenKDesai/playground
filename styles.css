@@ -1243,3 +1243,8 @@ footer .links a:hover {
   margin-bottom: 12px;
   font-size: 12px;
 }
+
+#heatmap text.axis-title {
+  font-size: 11px;
+  fill: #777;
+}

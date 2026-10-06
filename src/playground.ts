@@ -26,6 +26,7 @@ import {
   Problem
 } from "./state";
 import {Example2D, shuffle} from "./dataset";
+import * as customdata from "./customdata";
 import {AppendingLineChart} from "./linechart";
 import * as d3 from 'd3';
 
@@ -228,12 +229,16 @@ function makeGUI() {
   let regDataThumbnails = d3.selectAll("canvas[data-regDataset]");
   regDataThumbnails.on("click", function() {
     let newDataset = regDatasets[this.dataset.regdataset];
+    if (newDataset === customdata.regressCustom) {
+      openCustomEditor();
+    }
     if (newDataset === state.regDataset) {
       return; // No-op.
     }
     state.regDataset =  newDataset;
     regDataThumbnails.classed("selected", false);
     d3.select(this).classed("selected", true);
+    updateCustomEditButton();
     generateData();
     parametersChanged = true;
     reset();
@@ -243,6 +248,8 @@ function makeGUI() {
   // Select the dataset according to the current state.
   d3.select(`canvas[data-regDataset=${regDatasetKey}]`)
     .classed("selected", true);
+  updateCustomEditButton();
+  makeCustomEditor();
 
   d3.select("#add-layers").on("click", () => {
     if (state.numHiddenLayers >= 6) {
@@ -357,6 +364,7 @@ function makeGUI() {
     state.problem = problems[this.value];
     generateData();
     drawDatasetThumbnails();
+    updateCustomEditButton();
     parametersChanged = true;
     reset();
   });
@@ -1064,6 +1072,266 @@ function hideControls() {
     .attr("href", window.location.href);
 }
 
+/** Key used to keep uploaded/pasted CSV data across page loads. */
+const CSV_STORAGE_KEY = "playground.customCsv";
+
+function loadStoredCsv(): string {
+  try {
+    let text = window.localStorage.getItem(CSV_STORAGE_KEY);
+    if (text != null && text.trim() !== "") {
+      return text;
+    }
+  } catch (e) {
+    // Local storage can be unavailable (e.g. privacy mode).
+  }
+  return customdata.exampleCsv();
+}
+
+/** Returns false when the CSV could not be persisted. */
+function storeCsv(text: string): boolean {
+  try {
+    window.localStorage.setItem(CSV_STORAGE_KEY, text);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/** Configures the custom regression dataset from the (URL) state. */
+function initCustomData() {
+  if (state.regSource === "csv") {
+    try {
+      customdata.setCsv(customdata.parseCsv(loadStoredCsv()));
+      return;
+    } catch (e) {
+      // Fall back to the formula below.
+    }
+  }
+  state.regSource = "formula";
+  try {
+    customdata.setFormula(customdata.prepareFormula(state.regFormula));
+  } catch (e) {
+    state.regFormula = customdata.DEFAULT_FORMULA;
+    customdata.setFormula(customdata.prepareFormula(state.regFormula));
+  }
+}
+
+function updateCustomEditButton() {
+  let show = state.problem === Problem.REGRESSION &&
+      state.regDataset === customdata.regressCustom;
+  d3.select("#custom-edit-button").style("display", show ? "block" : null);
+}
+
+let openCustomEditor: () => void;
+
+/** Wires up the modal for editing the custom regression dataset. */
+function makeCustomEditor() {
+  let modal = d3.select("#custom-data-modal");
+  let formulaInput = d3.select("#custom-formula");
+  let csvInput = d3.select("#custom-csv");
+  let status = d3.select("#custom-status");
+  let applyButton = d3.select("#custom-apply");
+  let canvas = document.getElementById("custom-preview-canvas") as
+      HTMLCanvasElement;
+
+  let draftSource: customdata.Source = "formula";
+  let draftFormula: customdata.FormulaInfo = null;
+  let draftCsv: customdata.CsvData = null;
+
+  function fmt(v: number): string {
+    return String(+v.toPrecision(4));
+  }
+
+  function setStatus(text: string, isError: boolean) {
+    status.text(text).classed("error", isError);
+    applyButton.property("disabled", isError);
+  }
+
+  function drawPreview() {
+    let ctx = canvas.getContext("2d");
+    let w = canvas.width, h = canvas.height;
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, w, h);
+    if (draftSource === "formula" && draftFormula != null) {
+      // Fill the whole square with the (rescaled) function value.
+      let cell = 4;
+      let [lo, hi] = draftFormula.range;
+      for (let i = 0; i < w; i += cell) {
+        for (let j = 0; j < h; j += cell) {
+          let x = (i + cell / 2) / w * 12 - 6;
+          let y = 6 - (j + cell / 2) / h * 12;
+          let v = draftFormula.fn(x, y);
+          if (!isFinite(v)) {
+            continue;
+          }
+          let label = hi - lo < 1e-12 ? 0 : (v - lo) / (hi - lo) * 2 - 1;
+          ctx.fillStyle = colorScale(label) as any;
+          ctx.fillRect(i, j, cell, cell);
+        }
+      }
+    } else if (draftSource === "csv" && draftCsv != null) {
+      let points = customdata.generate("csv", null, draftCsv, 0, 0);
+      points.forEach(d => {
+        ctx.fillStyle = colorScale(d.label) as any;
+        ctx.fillRect(w * (d.x + 6) / 12 - 2, h * (6 - d.y) / 12 - 2, 4, 4);
+      });
+    }
+  }
+
+  function validate() {
+    draftFormula = null;
+    draftCsv = null;
+    try {
+      if (draftSource === "formula") {
+        draftFormula =
+            customdata.prepareFormula(formulaInput.property("value"));
+        let [lo, hi] = draftFormula.range;
+        setStatus(`Range on the grid: [${fmt(lo)}, ${fmt(hi)}]` +
+            (hi - lo < 1e-12 ? " (constant)" : ""), false);
+      } else {
+        let csv = customdata.parseCsv(csvInput.property("value"));
+        draftCsv = csv;
+        let c = csv.columns;
+        let parts = [`${csv.numRows} rows`];
+        if (csv.numSkipped > 0) {
+          parts.push(`${csv.numSkipped} skipped`);
+        }
+        parts.push(`x = ${c[0]} [${fmt(csv.xRange[0])}, ` +
+            `${fmt(csv.xRange[1])}]`);
+        if (!csv.oneDimensional) {
+          parts.push(`y = ${c[1]} [${fmt(csv.yRange[0])}, ` +
+              `${fmt(csv.yRange[1])}]`);
+        }
+        parts.push(`target = ${c[c.length - 1]} ` +
+            `[${fmt(csv.targetRange[0])}, ${fmt(csv.targetRange[1])}]`);
+        if (csv.numRows > customdata.MAX_CSV_POINTS) {
+          parts.push(`subsampled to ${customdata.MAX_CSV_POINTS}`);
+        }
+        setStatus(parts.join(" · "), false);
+      }
+    } catch (e) {
+      setStatus(e.message, true);
+    }
+    drawPreview();
+  }
+
+  function selectSource(source: customdata.Source) {
+    draftSource = source;
+    d3.selectAll(".custom-tab").classed("active", function() {
+      return this.getAttribute("data-source") === source;
+    });
+    d3.selectAll(".custom-pane").classed("active", function() {
+      return this.getAttribute("data-pane") === source;
+    });
+    validate();
+  }
+
+  function close() {
+    modal.classed("open", false);
+  }
+
+  function apply() {
+    let note = "";
+    if (draftSource === "formula") {
+      if (draftFormula == null) {
+        return;
+      }
+      state.regFormula = formulaInput.property("value").trim();
+      customdata.setFormula(draftFormula);
+    } else {
+      if (draftCsv == null) {
+        return;
+      }
+      customdata.setCsv(draftCsv);
+      if (!storeCsv(csvInput.property("value"))) {
+        note = "This CSV is too large to save in the browser, so it will " +
+            "be lost when the page reloads.";
+      }
+    }
+    state.regSource = draftSource;
+    state.regDataset = customdata.regressCustom;
+    d3.selectAll("canvas[data-regDataset]").classed("selected", false);
+    d3.select("canvas[data-regDataset=reg-custom]").classed("selected", true);
+    close();
+    if (note) {
+      alert(note);
+    }
+    drawDatasetThumbnails();
+    updateCustomEditButton();
+    generateData();
+    parametersChanged = true;
+    reset();
+  }
+
+  openCustomEditor = () => {
+    formulaInput.property("value", state.regFormula);
+    csvInput.property("value", loadStoredCsv());
+    modal.classed("open", true);
+    selectSource(customdata.getSource());
+    if (draftSource === "formula") {
+      (formulaInput.node() as HTMLInputElement).focus();
+    }
+  };
+
+  d3.select("#custom-edit-button").on("click", () => openCustomEditor());
+  d3.selectAll(".custom-tab").on("click", function() {
+    selectSource(this.getAttribute("data-source"));
+  });
+  formulaInput.on("input", validate);
+  formulaInput.on("keydown", () => {
+    if ((d3.event as KeyboardEvent).keyCode === 13 &&
+        !applyButton.property("disabled")) {
+      apply();
+    }
+  });
+  csvInput.on("input", validate);
+  d3.selectAll(".formula-presets button").on("click", function() {
+    formulaInput.property("value", this.getAttribute("data-formula"));
+    validate();
+  });
+  d3.select("#custom-csv-example").on("click", () => {
+    csvInput.property("value", customdata.exampleCsv());
+    validate();
+  });
+  d3.select("#custom-csv-clear").on("click", () => {
+    csvInput.property("value", "");
+    validate();
+  });
+  let fileInput = d3.select("#custom-csv-file");
+  d3.select("#custom-csv-upload").on("click", () => {
+    (fileInput.node() as HTMLInputElement).click();
+  });
+  fileInput.on("change", function() {
+    let file: File = this.files && this.files[0];
+    if (file == null) {
+      return;
+    }
+    let reader = new FileReader();
+    reader.onload = () => {
+      csvInput.property("value", reader.result as string);
+      validate();
+    };
+    reader.onerror = () => setStatus(`Could not read ${file.name}`, true);
+    reader.readAsText(file);
+    // Allow re-uploading the same file.
+    this.value = "";
+  });
+  applyButton.on("click", apply);
+  d3.select("#custom-cancel").on("click", close);
+  modal.on("click", function() {
+    // Close when clicking the backdrop, not the card.
+    if ((d3.event as Event).target === this) {
+      close();
+    }
+  });
+  d3.select(document).on("keydown.custom", () => {
+    if ((d3.event as KeyboardEvent).keyCode === 27 &&
+        modal.classed("open")) {
+      close();
+    }
+  });
+}
+
 function generateData(firstTime = false) {
   if (!firstTime) {
     // Change the seed.
@@ -1113,6 +1381,7 @@ function simulationStarted() {
   parametersChanged = false;
 }
 
+initCustomData();
 drawDatasetThumbnails();
 initTutorial();
 makeGUI();

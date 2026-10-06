@@ -15,6 +15,7 @@ limitations under the License.
 
 import * as nn from "./nn";
 import * as dataset from "./dataset";
+import * as customdata from "./customdata";
 
 /** Suffix added to the state when storing if a control is hidden or not. */
 const HIDE_STATE_SUFFIX = "_hide";
@@ -45,7 +46,8 @@ export let datasets: {[key: string]: dataset.DataGenerator} = {
 /** A map between dataset names and functions that generate regression data. */
 export let regDatasets: {[key: string]: dataset.DataGenerator} = {
   "reg-plane": dataset.regressPlane,
-  "reg-gauss": dataset.regressGaussian
+  "reg-gauss": dataset.regressGaussian,
+  "reg-custom": customdata.regressCustom
 };
 
 export function getKeyFromValue(obj: any, value: any): string {
@@ -130,7 +132,9 @@ export class State {
     {name: "tutorial", type: Type.STRING},
     {name: "problem", type: Type.OBJECT, keyMap: problems},
     {name: "initZero", type: Type.BOOLEAN},
-    {name: "hideText", type: Type.BOOLEAN}
+    {name: "hideText", type: Type.BOOLEAN},
+    {name: "regSource", type: Type.STRING},
+    {name: "regFormula", type: Type.STRING}
   ];
 
   [key: string]: any;
@@ -162,6 +166,9 @@ export class State {
   sinY = false;
   dataset: dataset.DataGenerator = dataset.classifyCircleData;
   regDataset: dataset.DataGenerator = dataset.regressPlane;
+  /** Source of the custom regression dataset: "formula" or "csv". */
+  regSource: customdata.Source = "formula";
+  regFormula = customdata.DEFAULT_FORMULA;
   seed: string;
 
   /**
@@ -203,7 +210,12 @@ export class State {
           break;
         case Type.STRING:
           if (hasKey(name)) {
-            state[name] = map[name];
+            // Strings such as formulas are URI-encoded in the hash.
+            try {
+              state[name] = decodeURIComponent(map[name]);
+            } catch (e) {
+              state[name] = map[name];
+            }
           }
           break;
         case Type.BOOLEAN:
@@ -255,6 +267,8 @@ export class State {
       } else if (type === Type.ARRAY_NUMBER ||
           type === Type.ARRAY_STRING) {
         value = value.join(",");
+      } else if (type === Type.STRING) {
+        value = encodeURIComponent(value);
       }
       props.push(`${name}=${value}`);
     });

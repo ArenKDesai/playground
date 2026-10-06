@@ -169,7 +169,13 @@ limitations under the License.
           <div class="dataset" title="Multi gaussian">
             <canvas class="data-thumbnail" data-regDataset="reg-gauss"></canvas>
           </div>
+          <div class="dataset" title="Custom: your own formula or CSV data">
+            <canvas class="data-thumbnail" data-regDataset="reg-custom"></canvas>
+          </div>
         </div>
+        <button class="basic-button custom-edit-button" id="custom-edit-button" title="Edit the custom regression dataset">
+          Edit custom data
+        </button>
       </div>
       <div>
         <div class="ui-percTrainData">
@@ -390,10 +396,64 @@ limitations under the License.
         </svg>
       </a>
       <div class="links">
-        <a href="https://github.com/tensorflow/playground">Source on GitHub</a>
+        <a href="https://github.com/ArenKDesai/playground">Source on GitHub</a>
+        <a href="https://github.com/tensorflow/playground">Original playground</a>
       </div>
     </div>
   </footer>
+  <!-- Custom regression data editor -->
+  <div id="custom-data-modal" class="custom-modal" role="dialog" aria-labelledby="custom-data-title">
+    <div class="custom-modal-card">
+      <h3 id="custom-data-title">Custom regression data</h3>
+      <div class="custom-source-tabs">
+        <button class="custom-tab" data-source="formula">Formula</button>
+        <button class="custom-tab" data-source="csv">CSV data</button>
+      </div>
+      <div class="custom-body">
+        <div class="custom-panes">
+          <div class="custom-pane" data-pane="formula">
+            <p>Define the target as a function of <code>x</code> and <code>y</code>, which range over [-6, 6]. The output is rescaled to [-1, 1] (orange to blue).</p>
+            <div class="formula-row">
+              <span class="formula-prefix">f(x, y) =</span>
+              <input id="custom-formula" type="text" spellcheck="false" autocomplete="off">
+            </div>
+            <div class="formula-presets">
+              <span class="label">Examples:</span>
+              <button data-formula="x^2 - y^2">saddle</button>
+              <button data-formula="sin(sqrt(x^2 + y^2))">ripple</button>
+              <button data-formula="sin(x) * cos(y / 2)">waves</button>
+              <button data-formula="exp(-((x-2)^2 + (y-2)^2) / 4) - exp(-((x+2)^2 + (y+2)^2) / 4)">two hills</button>
+              <button data-formula="abs(x) - abs(y)">diamond</button>
+              <button data-formula="tanh(x * y / 4)">soft xor</button>
+              <button data-formula="sin(x) + x / 3">1-D sine</button>
+              <button data-formula="step(x) - step(y)">steps</button>
+            </div>
+            <p class="hint">Operators <code>+ - * / ^ %</code> and parentheses. Functions: <code>sin cos tan asin acos atan sinh cosh tanh sigmoid exp log sqrt abs sign step floor ceil round</code>, plus <code>min max pow atan2 hypot</code> with two arguments. Constants <code>pi</code> and <code>e</code>.</p>
+          </div>
+          <div class="custom-pane" data-pane="csv">
+            <p>Paste or upload rows of <code>x, y, target</code> (or <code>x, target</code> for 1-D data). A header row is optional; commas, tabs, semicolons or spaces all work. Inputs are rescaled to the [-6, 6] grid and the target to [-1, 1].</p>
+            <textarea id="custom-csv" rows="11" spellcheck="false" placeholder="x,y,target&#10;0.5,1.2,3.4&#10;..."></textarea>
+            <div class="csv-buttons">
+              <button id="custom-csv-upload">Upload file&hellip;</button>
+              <input type="file" id="custom-csv-file" accept=".csv,.tsv,.txt,text/csv,text/plain">
+              <button id="custom-csv-example">Load example</button>
+              <button id="custom-csv-clear">Clear</button>
+            </div>
+            <p class="hint">CSV data stays in your browser (saved in local storage); it is not put in the shareable URL. Files over 3000 rows are randomly subsampled. For 1-D data, uncheck the <code>X&#8322;</code> feature.</p>
+          </div>
+        </div>
+        <div class="custom-preview">
+          <canvas id="custom-preview-canvas" width="160" height="160"></canvas>
+          <div class="label">Preview</div>
+        </div>
+      </div>
+      <div id="custom-status" class="custom-status"></div>
+      <div class="custom-actions">
+        <button id="custom-cancel" class="basic-button">Cancel</button>
+        <button id="custom-apply" class="basic-button primary">Use this data</button>
+      </div>
+    </div>
+  </div>
   <script src="bundle.js"></script>
   <!-- Google analytics -->
   <script src="analytics.js"></script>
